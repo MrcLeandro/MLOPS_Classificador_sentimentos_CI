@@ -83,7 +83,7 @@ Este projeto implementa um fluxo de MLOps para classificação de sentimentos em
 - O notebook `02_pipeline_validacao.ipynb` gera os arquivos `model.joblib` e `vectorizer.joblib` na raiz do projeto.
 - O `app.py` depende desses arquivos para fazer previsões.
 - O fluxo de CI do GitHub Actions executa notebooks e testes automaticamente em `main`.
-- Foi configurado o disparo manual das ações através do menu "Actions". Selecione o workflow MLOPs Pipeline CI e depois a branch 'main' pelo botão "run workflow".
+- Foi configurado o disparo manual das ações através do menu "Actions". Selecione o workflow CI Pipeline MLOPs e depois a branch 'main' pelo botão "run workflow".
 
 ## Dependências principais
 
