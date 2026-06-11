@@ -1,0 +1,27 @@
+version: '3.8'
+services:
+  mlserver:
+    image: python:3.10-slim
+    container_name: sentiment-mlserver
+    working_dir: /app
+    volumes:
+      - .:/app
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+      - "8082:8082"
+    environment:
+      - MLSERVER_DEBUG=true
+    command: >
+      sh -c "pip install -q -r requirements-mlserver.txt &&
+             mlserver start --model-settings-path /app/mlserver/model-settings.json"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sentiment-network
+networks:
+  sentiment-network:
+    driver: bridge
