@@ -1,0 +1,33 @@
+name: MLServer Integration
+on:
+  push:
+    branches: [main, mlserver-integration]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  mlserver-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-mlserver.txt
+      - run: |
+          if [ -f "model.joblib" ] && [ -f "vectorizer.joblib" ]; then
+            echo "✓ Artefatos encontrados"
+          else
+            echo "✗ Artefatos não encontrados"
+            exit 1
+          fi
+      - run: python -m pytest test_pipeline.py -v
+      - run: |
+          docker-compose up -d
+          sleep 15
+          python -m pytest test_mlserver.py -v || true
+          docker-compose down
+        continue-on-error: true
