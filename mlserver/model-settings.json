@@ -1,0 +1,7 @@
+{
+  "name": "sentiment-classifier",
+  "implementation": "mlserver.model.SentimentModel",
+  "parameters": {
+    "uri": "."
+  }
+}
