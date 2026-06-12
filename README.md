@@ -12,6 +12,7 @@ Este projeto implementa um fluxo de MLOps para classificação de sentimentos em
 - Exploração e limpeza de dados
 - Construção e validação de pipeline de ML
 - Deploy com Streamlit
+- Deploy com MLServer
 - Testes automatizados
 - Monitoramento de fairness
 
@@ -26,6 +27,10 @@ Este projeto implementa um fluxo de MLOps para classificação de sentimentos em
 - `notebooks/04_monitorar_fairness.ipynb` - análise de fairness e monitoramento de desempenho por tamanho de texto.
 - `test_pipeline.py` - testes automatizados para verificação de arquivos, previsões e fairness.
 - `.github/workflows/mlops.yml` - pipeline CI que executa notebooks e testes no GitHub Actions.
+- `mlserver/` - diretório com configuração do MLServer para servir o modelo via API REST/gRPC
+  - `settings.json` - configurações globais do servidor MLServer
+  - `model-settings.json` - configurações específicas do modelo de sentimento
+  - `model.py` - implementação da classe `SentimentModel` com lógica de inferência
 
 ## Etapas do projeto
 
@@ -39,8 +44,10 @@ Este projeto implementa um fluxo de MLOps para classificação de sentimentos em
    - Gerar artefatos de inferência: `model.joblib` e `vectorizer.joblib`.
 
 3. Deploy
-   - Redeploy local com `app.py` ou usar `notebooks/03_deploy_streamlit.ipynb` como referência.
-   - `app.py` carrega `model.joblib` e `vectorizer.joblib` para fazer previsões em tempo real.
+   - **Deploy local com Streamlit**: Use `app.py` ou `notebooks/03_deploy_streamlit.ipynb` como referência.
+     - `app.py` carrega `model.joblib` e `vectorizer.joblib` para fazer previsões em tempo real.
+   - **Deploy com MLServer**: Serve o modelo via API REST/gRPC para integração com outras aplicações.
+     - Veja a seção [MLServer](#mlserver) para detalhes de configuração e uso.
 
 4. Testes automatizados
    - `test_pipeline.py` contém casos de teste para:
@@ -78,7 +85,7 @@ O pipeline CI foi configurado no arquivo `.github/workflows/mlops.yml` e executa
    - Executa `pytest test_pipeline.py`
    - Valida a integridade dos artefatos, previsões e fairness
 
-O fluxo de CI é disparado automaticamente a cada push para a branch `main` ou pode ser executado manualmente através do menu "Actions" no GitHub (selecione o workflow "CI Pipeline MLOPs" e clique em "run workflow").
+O fluxo de CI é disparado automaticamente a cada push para a branch `main` ou pode ser executado manualmente através do menu "Actions" no GitHub (selecione o workflow "CI Pipeline MLOPs" e clique em "Run workflow").
 
 ### Continuous Deployment (CD) com Render
 
@@ -105,6 +112,127 @@ A aplicação Streamlit é automaticamente deployada na plataforma **Render** at
 - ✅ **Rastreabilidade**: Todo commit é rastreado com seus testes e deploy status
 - ✅ **Monitoramento**: Fairness e desempenho monitorados a cada iteração
 
+## MLServer
+
+### Visão Geral
+
+[MLServer](https://mlserver.readthedocs.io/) é um servidor de inferência de machine learning que fornece uma interface REST e gRPC para servir modelos de ML. Neste projeto, ele é utilizado para expor o modelo de classificação de sentimentos como um serviço de API.
+
+### Arquivos de Configuração
+
+#### `mlserver/settings.json`
+Configurações globais do servidor MLServer:
+- **debug**: Ativa modo de debug (true)
+- **http_port**: Porta HTTP (8080)
+- **grpc_port**: Porta gRPC (8081)
+- **metrics_port**: Porta de métricas Prometheus (8082)
+- **models**: Lista de modelos disponíveis no servidor
+
+#### `mlserver/model-settings.json`
+Configurações específicas do modelo:
+- **name**: Nome do modelo (`sentiment-classifier`)
+- **implementation**: Classe Python que implementa o modelo (`mlserver.model.SentimentModel`)
+- **parameters**: Parâmetros do modelo
+  - **uri**: Caminho onde os artefatos do modelo estão armazenados
+
+#### `mlserver/model.py`
+Implementação da classe `SentimentModel` que herda de `MLModel`:
+
+**Métodos principais:**
+- **`load()`**: Carrega os artefatos `model.joblib` e `vectorizer.joblib` durante a inicialização
+- **`predict(payload)`**: Realiza inferência sobre o texto fornecido e retorna:
+  - **sentiment**: Classificação (positivo/negativo)
+  - **confidence**: Confiança da predição (0 a 1)
+  - **probabilities**: Probabilidades para cada classe
+
+### Como Usar o MLServer
+
+#### 1. Instalação
+```bash
+pip install mlserver mlserver-sklearn
+```
+
+#### 2. Executar o Servidor
+```bash
+mlserver start mlserver/
+```
+
+O servidor iniciará nos seguintes endpoints:
+- **HTTP**: `http://localhost:8080`
+- **gRPC**: `grpc://localhost:8081`
+- **Métricas**: `http://localhost:8082/metrics`
+
+#### 3. Fazer Requisições
+
+**Exemplo de requisição HTTP (REST)**:
+```bash
+curl -X POST \
+  http://localhost:8080/v2/models/sentiment-classifier/infer \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "inputs": [{
+      "name": "text",
+      "shape": [1],
+      "datatype": "BYTES",
+      "data": ["Este produto é excelente!"]
+    }]
+  }'
+```
+
+**Resposta esperada**:
+```json
+{
+  "model_name": "sentiment-classifier",
+  "model_version": "1.0.0",
+  "outputs": [
+    {
+      "name": "sentiment",
+      "shape": [1],
+      "datatype": "BYTES",
+      "data": ["positivo"]
+    },
+    {
+      "name": "confidence",
+      "shape": [1],
+      "datatype": "FP32",
+      "data": [0.95]
+    },
+    {
+      "name": "probabilities",
+      "shape": [2],
+      "datatype": "FP32",
+      "data": [0.05, 0.95]
+    }
+  ]
+}
+```
+
+#### 4. Verificar Status do Modelo
+```bash
+curl http://localhost:8080/v2/models/sentiment-classifier
+```
+
+### Integração com Docker
+
+Para containerizar o MLServer, crie um `Dockerfile`:
+```dockerfile
+FROM python:3.10
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+EXPOSE 8080 8081 8082
+CMD ["mlserver", "start", "mlserver/"]
+```
+
+### Vantagens do MLServer
+
+- ✅ **Padronização**: Segue o padrão V2 Inference Protocol (KServe)
+- ✅ **Multi-protocolo**: Suporte a HTTP e gRPC
+- ✅ **Observabilidade**: Expõe métricas Prometheus
+- ✅ **Escalabilidade**: Integração com Kubernetes e orquestradores
+- ✅ **Flexibilidade**: Suporte a múltiplos frameworks (sklearn, XGBoost, TensorFlow, PyTorch, etc.)
+
 ## Dependências principais
 
 - pandas
@@ -112,6 +240,8 @@ A aplicação Streamlit é automaticamente deployada na plataforma **Render** at
 - great_expectations
 - mlflow
 - streamlit
+- mlserver
+- mlserver-sklearn
 - joblib
 - matplotlib
 - seaborn
