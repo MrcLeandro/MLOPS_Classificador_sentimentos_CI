@@ -1,0 +1,12 @@
+{
+  "debug": true,
+  "http_port": 8080,
+  "grpc_port": 8081,
+  "metrics_port": 8082,
+  "models": [
+    {
+      "name": "sentiment-classifier",
+      "implementation": "mlserver.model.SentimentModel"
+    }
+  ]
+}
